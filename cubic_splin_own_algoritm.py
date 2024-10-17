@@ -1,99 +1,51 @@
 import numpy as np
+from scipy.interpolate import CubicSpline
 import matplotlib.pyplot as plt
 
+# Datos originales completos
+years = [1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+systems = [4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 9, 13, 16, 24, 27, 34, 37, 41, 45, 45, 45]
 
-def tridiagonal_solve(a, b, c, d):
-    n = len(d)
-    x = np.zeros(n)
-    for i in range(1, n):
-        m = a[i - 1] / b[i - 1]
-        b[i] -= m * c[i - 1]
-        d[i] -= m * d[i - 1]
-    x[-1] = d[-1] / b[-1]
-    for i in range(n - 2, -1, -1):
-        x[i] = (d[i] - c[i] * x[i + 1]) / b[i]
-    return x
+# Datos para interpolación (excluyendo los años que queremos predecir)
+interp_years = [y for y in years if y not in [2003, 2011, 2017, 2023]]
+interp_systems = [s for y, s in zip(years, systems) if y not in [2003, 2011, 2017, 2023]]
 
+# Crear el spline cúbico
+cs = CubicSpline(interp_years, interp_systems)
 
-def cubic_spline(x, y):
-    n = len(x)
-    h = np.diff(x)
-    a = np.zeros(n - 1)
-    b = np.zeros(n)
-    c = np.zeros(n - 1)
-    d = np.zeros(n)
+# Generar años completos para la interpolación
+all_years = np.arange(1990, 2025)
+interpolated_systems = cs(all_years)
 
-    # Configurar el sistema tridiagonal
-    for i in range(1, n - 1):
-        b[i] = 2 * (h[i - 1] + h[i])
-        a[i - 1] = h[i - 1]
-        c[i] = h[i]
-        d[i] = 3 * ((y[i + 1] - y[i]) / h[i] - (y[i] - y[i - 1]) / h[i - 1])
-
-    # Condiciones de frontera natural
-    b[0] = b[-1] = 1
-
-    # Resolver el sistema tridiagonal
-    k = tridiagonal_solve(a, b, c, d)
-
-    def spline(t):
-        i = np.searchsorted(x, t) - 1
-        i = np.clip(i, 0, n - 2)
-        dx = t - x[i]
-        return (
-                y[i] +
-                k[i] * dx +
-                (3 * (y[i + 1] - y[i]) / h[i]**2 - (k[i + 1] + 2 * k[i]) / h[i]) * dx**2 +
-                (2 * (y[i] - y[i + 1]) / h[i]**3 + (k[i + 1] + k[i]) / h[i]**2) * dx**3
-        )
-
-    return spline
-
-
-# Datos originales
-years = np.array(
-    [1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
-     2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024])
-ai_systems = np.array(
-    [4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, np.nan, 6, 6, 6, 6, 6, 6, 6, np.nan, 6, 7, 9, 13, 16, np.nan, 27, 34, 37,
-     41, 45, np.nan, 45])
-
-# Filtrar los datos no nulos
-mask = ~np.isnan(ai_systems)
-years_known = years[mask]
-ai_systems_known = ai_systems[mask]
-
-# Crear la interpolación con splines cúbicas personalizadas
-spline_func = cubic_spline(years_known, ai_systems_known)
-
-# Generar puntos para una curva suave
-years_smooth = np.linspace(years.min(), years.max(), 500)
-ai_systems_smooth = np.array([spline_func(t) for t in years_smooth])
-
-# Calcular los valores interpolados para los años originales
-ai_systems_interpolated = np.array([spline_func(t) for t in years])
-
-# Crear la gráfica
+# Graficar resultados
 plt.figure(figsize=(12, 6))
-plt.scatter(years_known, ai_systems_known, color='blue', label='Datos conocidos')
-plt.plot(years_smooth, ai_systems_smooth, color='red', label='Interpolación por splines cúbicas')
-plt.scatter(years[~mask], ai_systems_interpolated[~mask], color='green', label='Valores interpolados')
-
+plt.plot(all_years, interpolated_systems, label='Interpolación', color='r')
+plt.scatter(years, systems, label='Datos originales', color='b')
 plt.xlabel('Año')
 plt.ylabel('Número acumulativo de sistemas de IA')
-plt.title('Interpolación por Splines Cúbicas de Sistemas de IA en Videojuegos (1990-2024)')
+plt.title('Interpolación por Splines Cúbicas de Sistemas de IA en Videojuegos')
 plt.legend()
 plt.grid(True)
 
-# Mostrar los valores interpolados
-for year, value in zip(years[~mask], ai_systems_interpolated[~mask]):
-    plt.annotate(f'{value:.2f}', (year, value), textcoords="offset points", xytext=(0, 10), ha='center')
+# Calcular y mostrar errores para los años faltantes
+missing_years = [2003, 2011, 2017, 2023]
+original_values = [6, 6, 24, 45]
+errors = []
+
+for year, original in zip(missing_years, original_values):
+    interpolated_value = cs(year)
+    error = abs(original - interpolated_value)
+    errors.append(error)
+    plt.text(year, interpolated_value, f'{year}: {interpolated_value:.2f}\nError: {error:.2f}',
+             verticalalignment='bottom', horizontalalignment='center')
 
 plt.show()
 
-# Imprimir los valores interpolados para los años faltantes
-missing_years = years[~mask]
-interpolated_values = ai_systems_interpolated[~mask]
-print("\nValores interpolados para los años faltantes:")
-for year, value in zip(missing_years, interpolated_values):
-    print(f"Año {year}: {value:.2f}")
+# Imprimir valores interpolados y errores para los años faltantes
+print("Valores interpolados y errores para los años faltantes:")
+for year, original, interpolated, error in zip(missing_years, original_values, cs(missing_years), errors):
+    print(f"{year}: Original: {original}, Interpolado: {interpolated:.2f}, Error: {error:.2f}")
+
+# Calcular error medio absoluto
+mae = np.mean(errors)
+print(f"\nError Medio Absoluto: {mae:.2f}")
